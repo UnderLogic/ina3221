@@ -1,0 +1,9 @@
+/target
+/Cargo.lock
+*.log
+
+# OS Files
+.DS_Store
+
+# JetBrains IDE
+.idea/

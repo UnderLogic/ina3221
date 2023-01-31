@@ -1,0 +1,14 @@
+[package]
+name = "ina3221"
+version = "0.1.0"
+authors = ["Erik Rogers <erik@underlogic.tech>"]
+edition = "2021"
+repository = "https://github.com/UnderLogic/ina3221"
+license = "MIT"
+description = "Embedded driver for INA3221 triple-channel power monitor"
+readme = "README.md"
+keywords = ["i2c", "driver", "embedded-hal-driver", "ina3221", "power"]
+categories = ["embedded", "hardware-support", "no-std"]
+
+[dependencies]
+embedded-hal = "1.0.0-alpha.9"
