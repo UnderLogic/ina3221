@@ -6,6 +6,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.2.1] - 2023-02-01
 
+### Added
+
+- `get_channels_enabled(&[bool])` method
+- `set_channels_enabled(&mut [bool])` mutator method
+
+### Changed
+
+- Documentation
+
+## [0.2.1] - 2023-02-01
+
 ### Fixed
 
 - `set_mode(OperatingMode)` should now operate correctly
