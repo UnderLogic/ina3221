@@ -23,6 +23,10 @@ $ cargo add ina3221
 
 **NOTE:** Some HALs require feature flagging to enable 1.0 functionality, for example [`esp-hal`](https://github.com/esp-rs/esp-hal) requires the `eh1` feature.
 
+## Documentation
+
+You can find the documentation [here](https://docs.rs/ina3221/latest/ina3221/struct.INA3221.html).
+
 ## Example
 
 This example assumes a **0.1 Ohm** shunt resistor for current and power calculations.
