@@ -73,6 +73,13 @@ impl Voltage {
         }
     }
 
+    /// Returns the sum of the two voltages
+    pub fn add(&self, other: &Self) -> Self {
+        Voltage {
+            microvolts: self.microvolts + other.microvolts,
+        }
+    }
+
     /// Returns a voltage clamped between the min and max microvolt values
     pub fn clamp(&self, min_microvolts: i32, max_microvolts: i32) -> Self {
         Voltage {

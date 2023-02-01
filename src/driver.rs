@@ -63,8 +63,8 @@ const BUS_VOLTAGE_SCALE_FACTOR: i32 = 8;
 /// ```rust
 /// // Assume a shunt resistor value of 0.1 ohms
 /// let shunt_resistor = 0.1f32;
-/// let shunt_voltage_mv = ina.get_shunt_voltage(0).unwrap().to_millivolts();
-/// let current_milliamps = shunt_voltage_mv / shunt_resistor;
+/// let shunt_voltage = ina.get_shunt_voltage(0).unwrap();
+/// let current_milliamps = shunt_voltage.to_millivolts() / shunt_resistor;
 /// ```
 ///
 /// # Power Calculation
@@ -79,12 +79,12 @@ const BUS_VOLTAGE_SCALE_FACTOR: i32 = 8;
 /// ```rust
 /// // Assume a shunt resistor value of 0.1 ohms
 /// let shunt_resistor = 0.1f32;
-/// let shunt_voltage_mv = ina.get_shunt_voltage(0).unwrap().to_millivolts();
-/// let bus_voltage_mv = ina.get_bus_voltage(0).unwrap().to_millivolts();
-/// let load_voltage = (bus_voltage_mv + shunt_voltage_mv) / 1000f32;  // convert to volts
+/// let shunt_voltage = ina.get_shunt_voltage(0).unwrap();
+/// let bus_voltage = ina.get_bus_voltage(0).unwrap();
+/// let load_voltage = bus_voltage.add(&shunt_voltage);
 ///
-/// let current_milliamps = shunt_voltage_mv / shunt_resistor;
-/// let power_milliwatts = current_milliamps * load_voltage;
+/// let current_milliamps = shunt_voltage.to_millivolts() / shunt_resistor;
+/// let power_milliwatts = current_milliamps * load_voltage.to_volts();
 /// ```
 ///
 /// # Operating Mode
@@ -267,7 +267,7 @@ where
     /// Sets the critical alert limit for a specific monitoring channel
     ///
     /// This is the shunt voltage limit that will trigger a critical alert on that channel
-    pub fn set_critical_alert_limit_uv(
+    pub fn set_critical_alert_limit(
         &mut self,
         channel: u8,
         voltage_limit: Voltage,
@@ -283,16 +283,51 @@ where
         self.write_register(register, helpers::convert_to_12bit_signed(raw_value))
     }
 
+    /// Gets the warning alert limit of a specific monitoring channel
+    ///
+    /// This is the shunt voltage limit that will trigger a warning alert on that channel
+    pub fn get_warning_alert_limit(&self, channel: u8) -> Result<Voltage, E> {
+        let register = match channel {
+            0 => Register::WarningAlertLimit1,
+            1 => Register::WarningAlertLimit2,
+            _ => Register::WarningAlertLimit3,
+        };
+
+        // LSB = 40uV, meaning the value is downscaled 40:1
+        let raw_value = self.read_register(register)?;
+        let microvolts = helpers::convert_from_12bit_signed(raw_value) * SHUNT_VOLTAGE_SCALE_FACTOR;
+        Ok(Voltage::from_microvolts(microvolts))
+    }
+
+    /// Sets the warning alert limit for a specific monitoring channel
+    ///
+    /// This is the shunt voltage limit that will trigger a warning alert on that channel
+    pub fn set_warning_alert_limit(
+        &mut self,
+        channel: u8,
+        voltage_limit: Voltage,
+    ) -> Result<(), E> {
+        let register = match channel {
+            0 => Register::WarningAlertLimit1,
+            1 => Register::WarningAlertLimit2,
+            _ => Register::WarningAlertLimit3,
+        };
+
+        // LSB = 40uV, meaning the value is downscaled 40:1
+        let raw_value = voltage_limit.to_microvolts() / SHUNT_VOLTAGE_SCALE_FACTOR;
+        self.write_register(register, helpers::convert_to_12bit_signed(raw_value))
+    }
+
     /// Gets the manufacturer ID from the INA3221
     ///
-    /// This value is always 0x5449 ('TI' in ASCII)
+    /// This value is always 0x5449 ('TI' in ASCII), or at least should be
     pub fn get_manufacturer_id(&self) -> Result<u16, E> {
         self.read_register(Register::ManufacturerId)
     }
 
     /// Gets the die ID from the INA3221
     ///
-    /// This value is always 0x3220
+    /// This value is always 0x3220, or at least should be
     pub fn get_die_id(&self) -> Result<u16, E> {
         self.read_register(Register::DieId)
     }
