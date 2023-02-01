@@ -1,3 +1,4 @@
+/// Represents a register on the INA3221
 pub enum Register {
     Configuration = 0x00,
     ShuntVoltage1 = 0x01,
@@ -6,12 +7,12 @@ pub enum Register {
     BusVoltage2 = 0x04,
     ShuntVoltage3 = 0x05,
     BusVoltage3 = 0x06,
-    CriticalAlert1 = 0x07,
-    WarningAlert1 = 0x08,
-    CriticalAlert2 = 0x09,
-    WarningAlert2 = 0x0A,
-    CriticalAlert3 = 0x0B,
-    WarningAlert3 = 0x0C,
+    CriticalAlertLimit1 = 0x07,
+    WarningAlertLimit1 = 0x08,
+    CriticalAlertLimit2 = 0x09,
+    WarningAlertLimit2 = 0x0A,
+    CriticalAlertLimit3 = 0x0B,
+    WarningAlertLimit3 = 0x0C,
     ShuntVoltageSum = 0x0D,
     ShuntVoltageSumLimit = 0x0E,
     MaskEnable = 0x0F,
