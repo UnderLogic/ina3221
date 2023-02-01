@@ -50,7 +50,7 @@ fn main() {
             let load_voltage = bus_voltage.add(&shunt_voltage);
 
             // Skip channel if no voltage present
-            if shunt_mv.is_zero() {
+            if shunt_voltage.is_zero() {
                 continue;
             }
             
