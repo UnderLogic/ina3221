@@ -1,4 +1,5 @@
 use crate::registers::Register;
+use crate::{helpers, OperatingMode};
 use core::cell::RefCell;
 use hal::i2c::I2c;
 
@@ -10,8 +11,112 @@ const CHANNEL_3_FLAG: u16 = 0x1000;
 const SHUNT_VOLTAGE_SCALE_FACTOR: i32 = 40;
 const BUS_VOLTAGE_SCALE_FACTOR: i32 = 8;
 
+/// Device driver for the INA3221 current and power monitor
+///
+/// The [INA3221] is a triple-channel shunt and bus voltage monitor that can be used to measure
+/// current and power consumption from up to three loads.
+///
+/// It is very similar to the INA219, but with a few additional features and a different register
+/// layout.
+///
+///
+/// # Channels
+///
+/// The INA3221 has three channels, each of which can be used to measure the current and power
+/// consumption of a load. The voltage should not exceed 26V and the maximum current draw should
+/// not exceed 3.2A (per-channel).
+///
+/// The INA3221 can be configured to enable or disable each channel individually.
+/// By default, all three channels are enabled.
+///
+/// The last measurements are retained in the device's registers, even if the channel
+/// is disabled. This means that the last measurements will be returned when the channel is read.
+///
+/// Channel index is zero-based, so channel 1 is index 0, channel 2 is index 1, and channel 3 is index 2.
+/// Attempting to use a channel index outside of the range of 0-2 will use the third channel.
+///
+/// # Shunt Resistor
+///
+/// The INA3221 requires a shunt resistor to be connected to each channel. The value of this resistor
+/// is used to calculate the current draw from the load. The shunt resistor should be as small as
+/// possible, but large enough to handle the maximum current draw of the load. The shunt resistor
+/// should be connected between the load and the INA3221's shunt voltage measurement pin.
+///
+/// A common value for the shunt resistor is **0.1 ohms**, which can handle up to 3.2A of current draw.
+///
+/// # Current Calculation
+///
+/// Unlike the INA219, the INA3221 does not store the shunt resistor value in the device,
+/// and so the current draw must be calculated manually instead of using the device's built-in
+/// current calculation and register.
+///
+/// The bonus of this is that the shunt resistor value can be changed without the need to
+/// calibrate the INA3221, only the firmware needs to be updated.
+///
+/// The current draw can be calculated using Ohm's Law:
+/// I = V / R
+///
+/// It is important to be mindful of the units used when calculating the current draw.
+///
+/// ## Example
+///
+/// ```rust
+/// // Assume a shunt resistor value of 0.1 ohms
+/// let shunt_resistor = 0.1f32;
+/// let shunt_voltage_mv = ina.get_shunt_voltage_mv(0).unwrap();
+/// let current_milliamps = shunt_voltage_mv / shunt_resistor;
+/// ```
+///
+/// # Power Calculation
+///
+/// Similar to the current calculation, the power draw can be calculated using Ohm's Law:
+/// P = I * V
+///
+/// Again, it is important to be mindful of the units used when calculating the power draw.
+///
+/// ## Example
+///
+/// ```rust
+/// // Assume a shunt resistor value of 0.1 ohms
+/// let shunt_resistor = 0.1f32;
+/// let shunt_voltage_mv = ina.get_shunt_voltage_mv(0).unwrap();
+/// let bus_voltage_mv = ina.get_bus_voltage_mv(0).unwrap();
+/// let load_voltage = (bus_voltage_mv + shunt_voltage_mv) / 1000f32;  // convert to volts
+///
+/// let current_milliamps = shunt_voltage_mv / shunt_resistor;
+/// let power_milliwatts = current_milliamps * load_voltage;
+/// ```
+///
+/// # Operating Mode
+///
+/// The INA3221 can be configured to operate in one of three modes:
+///
+/// - Power-down
+/// - Triggered
+/// - Continuous
+///
+/// The default operating mode is continuous, which means that the device will continuously
+/// measure the shunt and bus voltages and store the results in the device's registers.
+/// Any disabled channels will not be measured and are skipped from the measurement cycle.
+///
+/// The triggered mode is similar to the continuous mode, but the device will only measure
+/// the shunt and bus voltages when a trigger is received. The trigger can be received from
+/// setting the mode to triggered (even if already set).
+///
+/// The power-down mode will disable all measurements and put the device into a low-power state.
+/// The last measurement results will be stored in the device's registers and can be read.
+///
+/// # Alerts
+/// The INA3221 can be configured to trigger various alerts based on the various measurements.
+///
+/// Currently, it is not possible to configure these alerts using this driver.
+/// See the [INA3221] datasheet for more information on the available alerts and
+/// how they are triggered.
+///
+/// [INA3221]: https://www.ti.com/lit/ds/symlink/ina3221.pdf
 pub struct INA3221<I2C> {
     i2c: RefCell<I2C>,
+    /// I2C address of the INA3221
     pub address: u8,
 }
 
@@ -19,6 +124,9 @@ impl<I2C, E> INA3221<I2C>
 where
     I2C: I2c<Error = E>,
 {
+    /// Create a new INA3221 driver instance from an I2C peripheral on a specific address
+    ///
+    /// This is typically 0x40, 0x41, or 0x42 depending on the A0 pin setting
     pub fn new(i2c: I2C, address: u8) -> INA3221<I2C> {
         INA3221 {
             i2c: RefCell::new(i2c),
@@ -26,10 +134,38 @@ where
         }
     }
 
+    /// Gets the active configuration bits from the INA3221
     pub fn get_configuration(&self) -> Result<u16, E> {
         self.read_register(Register::Configuration)
     }
 
+    /// Gets the operating mode of the INA3221
+    pub fn get_mode(&self) -> Result<OperatingMode, E> {
+        let config = self.get_configuration()?;
+        let mode = match config & 0x7 {
+            0x01 => OperatingMode::Triggered,
+            0x02 => OperatingMode::Triggered,
+            0x03 => OperatingMode::Triggered,
+            0x05 => OperatingMode::Continuous,
+            0x06 => OperatingMode::Continuous,
+            0x07 => OperatingMode::Continuous,
+            _ => OperatingMode::PowerDown,
+        };
+
+        Ok(mode)
+    }
+
+    /// Sets the operating mode of the INA3221
+    ///
+    /// Setting the mode to `OperatingMode::Triggered` will trigger a measurement cycle
+    pub fn set_mode(&mut self, mode: OperatingMode) -> Result<(), E> {
+        let config = self.get_configuration()?;
+        self.write_register(Register::Configuration, config | mode as u16)
+    }
+
+    /// Checks if a monitoring channel is enabled on the INA3221
+    ///
+    /// A disabled channel can still be read, but will not be sampled until it is re-enabled
     pub fn is_channel_enabled(&self, channel: u8) -> Result<bool, E> {
         let flag = match channel {
             0 => CHANNEL_1_FLAG,
@@ -41,6 +177,10 @@ where
         Ok(config & flag > 0)
     }
 
+    /// Enables or disables a monitoring channel on the INA3221
+    ///
+    /// Disabling a channel only prevents it from being sampled
+    /// The channel register values will still contain the last recorded values
     pub fn set_channel_enabled(&mut self, channel: u8, enabled: bool) -> Result<(), E> {
         let flag = match channel {
             0 => CHANNEL_1_FLAG,
@@ -57,12 +197,14 @@ where
         }
     }
 
+    /// Gets the shunt voltage (in millivolts) from a specific monitoring channel
     pub fn get_shunt_voltage_mv(&self, channel: u8) -> Result<f32, E> {
         // Convert whole microvolts into fractional millivolts
         let microvolts = self.get_shunt_voltage_uv(channel)?;
         Ok(microvolts as f32 / 1000f32)
     }
 
+    /// Gets the shunt voltage (in microvolts) from a specific monitoring channel
     pub fn get_shunt_voltage_uv(&self, channel: u8) -> Result<i32, E> {
         let register = match channel {
             0 => Register::ShuntVoltage1,
@@ -72,15 +214,17 @@ where
 
         // LSB = 40uV, meaning the value is downscaled 40:1
         let raw_value = self.read_register(register)?;
-        let microvolts = Self::convert_to_12bit_signed(raw_value) * SHUNT_VOLTAGE_SCALE_FACTOR;
+        let microvolts = helpers::convert_from_12bit_signed(raw_value) * SHUNT_VOLTAGE_SCALE_FACTOR;
         Ok(microvolts)
     }
 
+    /// Gets the bus voltage (in volts) from a specific monitoring channel
     pub fn get_bus_voltage(&self, channel: u8) -> Result<f32, E> {
         let millivolts = self.get_bus_voltage_mv(channel)?;
         Ok(millivolts as f32 / 1000f32)
     }
 
+    /// Gets the bus voltage (in millivolts) from a specific monitoring channel
     pub fn get_bus_voltage_mv(&self, channel: u8) -> Result<i32, E> {
         let register = match channel {
             0 => Register::BusVoltage1,
@@ -90,18 +234,74 @@ where
 
         // LSB = 8mV, meaning the value is downscaled 8:1
         let raw_value = self.read_register(register)?;
-        let millivolts = Self::convert_to_12bit_signed(raw_value) * BUS_VOLTAGE_SCALE_FACTOR;
+        let millivolts = helpers::convert_from_12bit_signed(raw_value) * BUS_VOLTAGE_SCALE_FACTOR;
         Ok(millivolts)
     }
 
+    /// Gets the critical alert limit (in millivolts) from a specific monitoring channel
+    ///
+    /// This is the shunt voltage limit that will trigger a critical alert on that channel
+    pub fn get_critical_alert_limit_mv(&self, channel: u8) -> Result<f32, E> {
+        let microvolts = self.get_critical_alert_limit_uv(channel)?;
+        Ok(microvolts as f32 / 1000f32)
+    }
+
+    /// Gets the critical alert limit (in microvolts) from a specific monitoring channel
+    ///
+    /// This is the shunt voltage limit that will trigger a critical alert on that channel
+    pub fn get_critical_alert_limit_uv(&self, channel: u8) -> Result<i32, E> {
+        let register = match channel {
+            0 => Register::CriticalAlertLimit1,
+            1 => Register::CriticalAlertLimit2,
+            _ => Register::CriticalAlertLimit3,
+        };
+
+        // LSB = 40uV, meaning the value is downscaled 40:1
+        let raw_value = self.read_register(register)?;
+        let microvolts = helpers::convert_from_12bit_signed(raw_value) * SHUNT_VOLTAGE_SCALE_FACTOR;
+        Ok(microvolts)
+    }
+
+    /// Sets the critical alert limit (in millivolts) for a specific monitoring channel
+    ///
+    /// This is the shunt voltage limit that will trigger a critical alert on that channel
+    pub fn set_critical_alert_limit_mv(&mut self, channel: u8, millivolts: f32) -> Result<(), E> {
+        let microvolts = millivolts * 1000f32;
+        self.set_critical_alert_limit_uv(channel, microvolts as i32)
+    }
+
+    /// Sets the critical alert limit (in microvolts) for a specific monitoring channel
+    ///
+    /// This is the shunt voltage limit that will trigger a critical alert on that channel
+    pub fn set_critical_alert_limit_uv(&mut self, channel: u8, microvolts: i32) -> Result<(), E> {
+        let register = match channel {
+            0 => Register::CriticalAlertLimit1,
+            1 => Register::CriticalAlertLimit2,
+            _ => Register::CriticalAlertLimit3,
+        };
+
+        // LSB = 40uV, meaning the value is downscaled 40:1
+        let raw_value = microvolts / SHUNT_VOLTAGE_SCALE_FACTOR;
+        self.write_register(register, helpers::convert_to_12bit_signed(raw_value))
+    }
+
+    /// Gets the manufacturer ID from the INA3221
+    ///
+    /// This value is always 0x5449 ('TI' in ASCII)
     pub fn get_manufacturer_id(&self) -> Result<u16, E> {
         self.read_register(Register::ManufacturerId)
     }
 
+    /// Gets the die ID from the INA3221
+    ///
+    /// This value is always 0x3220
     pub fn get_die_id(&self) -> Result<u16, E> {
         self.read_register(Register::DieId)
     }
 
+    /// Resets the INA3221
+    ///
+    /// This clears all configuration bits and sets the default configuration
     pub fn reset(&mut self) -> Result<(), E> {
         let config = self.read_register(Register::Configuration)?;
         self.write_register(Register::Configuration, config | RESET_FLAG)
@@ -130,14 +330,5 @@ where
         let buffer: [u8; 3] = [register as u8, msb, lsb];
         self.i2c.borrow_mut().write(self.address, &buffer)?;
         Ok(())
-    }
-
-    fn convert_to_12bit_signed(value: u16) -> i32 {
-        let value = match value & 0x8000 > 0 {
-            true => !value + 1,
-            false => value,
-        };
-
-        (value >> 3) as i32
     }
 }
