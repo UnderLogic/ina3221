@@ -16,6 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `read_alert_flags()` method now returns `MaskEnableFlags` bitflags struct
+- `read_alert_flags()` method now allows preserving the alert flags
 - Documentation
 
 ## [0.2.1] - 2023-02-01

@@ -421,11 +421,11 @@ where
         Ok(())
     }
 
-    /// Reads the alert flags from the INA3221, clearing them upon read
+    /// Reads the alert flags from the INA3221
     ///
-    /// The flags are returned as a bitfield, see the datasheet for more information
-    pub fn read_alert_flags(&mut self) -> Result<u16, E> {
-        self.read_register(Register::MaskEnable)
+    /// If `preserve` is set to `true`, the flags will not be cleared after reading
+    pub fn read_alert_flags(&mut self, preserve: bool) -> Result<MaskEnableFlags, E> {
+        self.read_flags(preserve)
     }
 
     /// Gets the manufacturer ID from the INA3221
@@ -475,14 +475,14 @@ where
         Ok(())
     }
 
-    fn read_flag(&mut self, flag: MaskEnableFlags, preserve: bool) -> Result<bool, E> {
+    fn read_flags(&mut self, preserve: bool) -> Result<MaskEnableFlags, E> {
         let flags = self.read_register(Register::MaskEnable)?;
         let flags = MaskEnableFlags::from_bits(flags).unwrap();
 
         if preserve {
             self.write_register(Register::MaskEnable, flags.bits())?;
         }
-        Ok(flags.contains(flag))
+        Ok(flags)
     }
 
     fn set_flag(&mut self, flag: MaskEnableFlags, enabled: bool) -> Result<(), E> {
