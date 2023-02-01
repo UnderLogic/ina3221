@@ -1,4 +1,5 @@
 /// Represents a register on the INA3221
+#[derive(Debug)]
 pub enum Register {
     Configuration = 0x00,
     ShuntVoltage1 = 0x01,

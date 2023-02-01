@@ -1,4 +1,5 @@
 /// Represents the operating mode of the INA3221
+#[derive(Debug)]
 pub enum OperatingMode {
     /// Power save mode, no measurements are performed
     PowerDown = 0x00,

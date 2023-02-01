@@ -99,12 +99,13 @@ const BUS_VOLTAGE_SCALE_FACTOR: i32 = 8000;
 /// measure the shunt and bus voltages and store the results in the device's registers.
 /// Any disabled channels will not be measured and are skipped from the measurement cycle.
 ///
-/// The triggered mode is similar to the continuous mode, but the device will only measure
-/// the shunt and bus voltages when a trigger is received. The trigger can be received from
-/// setting the mode to triggered (even if already set).
+/// When triggered mode is set, the device will take a one-time measurement of the shunt and bus
+/// voltages, and then enter a power-down state. The device will remain in this state until
+/// the operating mode is changed to either continuous or triggered (again).
 ///
 /// The power-down mode will disable all measurements and put the device into a low-power state.
-/// The last measurement results will be stored in the device's registers and can be read.
+/// The last measurement results will be stored in the device's registers and can be read even
+/// while powered down.
 ///
 /// # Alerts
 /// The INA3221 can be configured to trigger various alerts based on the various measurements.
@@ -183,7 +184,8 @@ where
     /// Setting the mode to `OperatingMode::Triggered` will trigger a measurement cycle
     pub fn set_mode(&mut self, mode: OperatingMode) -> Result<(), E> {
         let config = self.get_configuration()?;
-        self.write_register(Register::Configuration, config | mode as u16)
+        let new_config = (config & 0xFFF8) | mode as u16;
+        self.write_register(Register::Configuration, new_config)
     }
 
     /// Checks if a monitoring channel is enabled on the INA3221
@@ -320,8 +322,8 @@ where
 
     /// Gets the power valid limits of **all** enabled monitoring channels
     ///
-    /// These are the upper and lower limits for the bus voltage that will trigger a power valid alert
-    /// on all enabled channels
+    /// These are the lower and upper limits (respectively) for the bus voltage that will trigger
+    /// a power valid alert on all enabled channels
     pub fn get_power_valid_limits(&self) -> Result<(Voltage, Voltage), E> {
         // LSB = 8mV (8000uV), meaning the value is downscaled 8:1
         let lower_raw_value = self.read_register(Register::PowerValidLowerLimit)?;
