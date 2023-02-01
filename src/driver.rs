@@ -3,6 +3,9 @@ use core::cell::RefCell;
 use hal::i2c::I2c;
 
 const RESET_FLAG: u16 = 0x8000;
+const CHANNEL_1_FLAG: u16 = 0x4000;
+const CHANNEL_2_FLAG: u16 = 0x2000;
+const CHANNEL_3_FLAG: u16 = 0x1000;
 
 const SHUNT_VOLTAGE_SCALE_FACTOR: i32 = 40;
 const BUS_VOLTAGE_SCALE_FACTOR: i32 = 8;
@@ -25,6 +28,33 @@ where
 
     pub fn read_configuration(&self) -> Result<u16, E> {
         self.read_register(Register::Configuration)
+    }
+
+    pub fn is_channel_enabled(&self, channel: u8) -> Result<bool, E> {
+        let flag = match channel {
+            0 => CHANNEL_1_FLAG,
+            1 => CHANNEL_2_FLAG,
+            _ => CHANNEL_3_FLAG,
+        };
+
+        let config = self.read_configuration()?;
+        Ok(config & flag > 0)
+    }
+
+    pub fn set_channel_enabled(&mut self, channel: u8, enabled: bool) -> Result<(), E> {
+        let flag = match channel {
+            0 => CHANNEL_1_FLAG,
+            1 => CHANNEL_2_FLAG,
+            _ => CHANNEL_3_FLAG,
+        };
+
+        let config = self.read_configuration()?;
+
+        // Toggle the channel bit in the configuration
+        match enabled {
+            true => self.write_register(Register::Configuration, config | flag),
+            false => self.write_register(Register::Configuration, config & !flag),
+        }
     }
 
     pub fn get_shunt_voltage_mv(&self, channel: u8) -> Result<f32, E> {
