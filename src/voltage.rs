@@ -1,7 +1,4 @@
-/// Voltage is a struct that represents a voltage in microvolts
-/// and provides methods to convert to and from millivolts and volts
-///
-/// This avoids needing to create various function signatures for each desired unit
+/// Represents a voltage that can be measured by the INA3221
 ///
 /// The struct is immutable and provides methods to create a new instance
 #[derive(Debug, Copy, Clone)]
@@ -10,19 +7,19 @@ pub struct Voltage {
 }
 
 impl Voltage {
-    /// Creates a new Voltage struct from a value in microvolts
+    /// Creates a voltage from a value in microvolts
     pub fn from_microvolts(microvolts: i32) -> Self {
         Voltage { microvolts }
     }
 
-    /// Creates a new Voltage struct from a value in millivolts
+    /// Creates a voltage from a value in millivolts
     pub fn from_millivolts(millivolts: f32) -> Self {
         Voltage {
             microvolts: (millivolts * 1000f32) as i32,
         }
     }
 
-    /// Creates a new Voltage struct from a value in volts
+    /// Creates a voltage from a value in volts
     pub fn from_volts(volts: f32) -> Self {
         Voltage {
             microvolts: (volts * 1000000f32) as i32,

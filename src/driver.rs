@@ -1,5 +1,5 @@
 use crate::registers::Register;
-use crate::{helpers, OperatingMode, Voltage};
+use crate::{helpers, MaskEnableFlags, OperatingMode, Voltage};
 use core::cell::RefCell;
 use hal::i2c::I2c;
 
@@ -18,6 +18,13 @@ const BUS_VOLTAGE_SCALE_FACTOR: i32 = 8000;
 ///
 /// It is very similar to the INA219, but with a few additional features and a different register
 /// layout.
+///
+/// # Configuration
+///
+/// The INA3221 can be configured to use different operating modes and alert thresholds.
+///
+/// It is important to note that the INA3221 will retain configuration settings unless the device is
+/// reset or power cycled. You can manually reset the device by calling the `reset()` method.
 ///
 ///
 /// # Channels
@@ -188,9 +195,43 @@ where
         self.write_register(Register::Configuration, new_config)
     }
 
+    /// Gets the enabled status for all three channels, storing them in an array
+    ///
+    /// This is useful for iterating over all channels without having to call
+    /// `is_channel_enabled` multiple times
+    pub fn get_channels_enabled(&self, statuses: &mut [bool]) -> Result<(), E> {
+        let config = self.get_configuration()?;
+        statuses[0] = config & CHANNEL_1_FLAG > 0;
+        statuses[1] = config & CHANNEL_2_FLAG > 0;
+        statuses[2] = config & CHANNEL_3_FLAG > 0;
+        Ok(())
+    }
+
+    /// Sets the enabled status for all three channels
+    ///
+    /// This is useful for enabling or disabling all channels at once without having to call
+    /// `set_channel_enabled` multiple times
+    ///
+    /// Disabling a channel prevents it from being measured, but it can still be read
+    /// for the last measurement result
+    pub fn set_channels_enabled(&mut self, enabled: &[bool]) -> Result<(), E> {
+        let config = self.get_configuration()?;
+        let mut new_config = config & 0xFFF8;
+        if enabled[0] {
+            new_config |= CHANNEL_1_FLAG;
+        }
+        if enabled[1] {
+            new_config |= CHANNEL_2_FLAG;
+        }
+        if enabled[2] {
+            new_config |= CHANNEL_3_FLAG;
+        }
+        self.write_register(Register::Configuration, new_config)
+    }
+
     /// Checks if a monitoring channel is enabled on the INA3221
     ///
-    /// A disabled channel can still be read, but will not be sampled until it is re-enabled
+    /// A disabled channel can still be read, but will not be measured until it is re-enabled
     pub fn is_channel_enabled(&self, channel: u8) -> Result<bool, E> {
         let flag = match channel {
             0 => CHANNEL_1_FLAG,
@@ -204,8 +245,8 @@ where
 
     /// Enables or disables a monitoring channel on the INA3221
     ///
-    /// Disabling a channel only prevents it from being sampled
-    /// The channel register values will still contain the last recorded values
+    /// Disabling a channel prevents it from being measured, but it can still be read
+    /// for the last measurement result
     pub fn set_channel_enabled(&mut self, channel: u8, enabled: bool) -> Result<(), E> {
         let flag = match channel {
             0 => CHANNEL_1_FLAG,
@@ -285,6 +326,13 @@ where
         self.write_register(register, helpers::convert_to_12bit_signed(raw_value))
     }
 
+    /// Sets the critical alert latch behavior for the warning alert pin
+    ///
+    /// If enabled, the critical alert pin will latch until the warning alert is cleared
+    pub fn set_critical_alert_latch(&mut self, enabled: bool) -> Result<(), E> {
+        self.set_flag(MaskEnableFlags::CRITICAL_ALERT_LATCH, enabled)
+    }
+
     /// Gets the warning alert limit of a specific monitoring channel
     ///
     /// This is the shunt voltage limit that will trigger a warning alert on that channel
@@ -318,6 +366,13 @@ where
         // LSB = 40uV, meaning the value is downscaled 40:1
         let raw_value = voltage_limit.to_microvolts() / SHUNT_VOLTAGE_SCALE_FACTOR;
         self.write_register(register, helpers::convert_to_12bit_signed(raw_value))
+    }
+
+    /// Sets the warning alert latch behavior for the warning alert pin
+    ///
+    /// If enabled, the warning alert pin will latch until the warning alert is cleared
+    pub fn set_warning_alert_latch(&mut self, enabled: bool) -> Result<(), E> {
+        self.set_flag(MaskEnableFlags::WARNING_ALERT_LATCH, enabled)
     }
 
     /// Gets the power valid limits of **all** enabled monitoring channels
@@ -366,23 +421,23 @@ where
         Ok(())
     }
 
-    /// Reads the alert flags from the INA3221, clearing them upon read
+    /// Reads the alert flags from the INA3221
     ///
-    /// The flags are returned as a bitfield, see the datasheet for more information
-    pub fn read_alert_flags(&mut self) -> Result<u16, E> {
-        self.read_register(Register::MaskEnable)
+    /// If `preserve` is set to `true`, the flags will not be cleared after reading
+    pub fn read_alert_flags(&mut self, preserve: bool) -> Result<MaskEnableFlags, E> {
+        self.read_flags(preserve)
     }
 
     /// Gets the manufacturer ID from the INA3221
     ///
-    /// This value is always 0x5449 ('TI' in ASCII), or at least should be
+    /// This value is always 0x5449 ('TI' in ASCII), or at least should be for genuine INA3221s
     pub fn get_manufacturer_id(&self) -> Result<u16, E> {
         self.read_register(Register::ManufacturerId)
     }
 
     /// Gets the die ID from the INA3221
     ///
-    /// This value is always 0x3220, or at least should be
+    /// This value is always 0x3220, or at least should be for genuine INA3221s
     pub fn get_die_id(&self) -> Result<u16, E> {
         self.read_register(Register::DieId)
     }
@@ -418,5 +473,22 @@ where
         let buffer: [u8; 3] = [register as u8, msb, lsb];
         self.i2c.borrow_mut().write(self.address, &buffer)?;
         Ok(())
+    }
+
+    fn read_flags(&mut self, preserve: bool) -> Result<MaskEnableFlags, E> {
+        let flags = self.read_register(Register::MaskEnable)?;
+        let flags = MaskEnableFlags::from_bits(flags).unwrap();
+
+        if preserve {
+            self.write_register(Register::MaskEnable, flags.bits())?;
+        }
+        Ok(flags)
+    }
+
+    fn set_flag(&mut self, flag: MaskEnableFlags, enabled: bool) -> Result<(), E> {
+        let flags = self.read_register(Register::MaskEnable)?;
+        let mut new_flags = MaskEnableFlags::from_bits(flags).unwrap();
+        new_flags.set(flag, enabled);
+        self.write_register(Register::MaskEnable, new_flags.bits())
     }
 }
