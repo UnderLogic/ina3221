@@ -4,6 +4,9 @@ use hal::i2c::I2c;
 
 const RESET_FLAG: u16 = 0x8000;
 
+const SHUNT_VOLTAGE_SCALE_FACTOR: i32 = 40;
+const BUS_VOLTAGE_SCALE_FACTOR: i32 = 8;
+
 pub struct INA3221<I2C> {
     i2c: RefCell<I2C>,
     pub address: u8,
@@ -25,6 +28,7 @@ where
     }
 
     pub fn get_shunt_voltage_mv(&self, channel: u8) -> Result<f32, E> {
+        // Convert whole microvolts into fractional millivolts
         let microvolts = self.get_shunt_voltage_uv(channel)?;
         Ok(microvolts as f32 / 1000f32)
     }
@@ -36,9 +40,28 @@ where
             _ => Register::ShuntVoltage3,
         };
 
+        // LSB = 40uV, meaning the value is downscaled 40:1
         let raw_value = self.read_register(register)?;
-        let microvolts = Self::convert_to_12bit_signed(raw_value) * 40;
+        let microvolts = Self::convert_to_12bit_signed(raw_value) * SHUNT_VOLTAGE_SCALE_FACTOR;
         Ok(microvolts)
+    }
+
+    pub fn get_bus_voltage(&self, channel: u8) -> Result<f32, E> {
+        let millivolts = self.get_bus_voltage_mv(channel)?;
+        Ok(millivolts as f32 / 1000f32)
+    }
+
+    pub fn get_bus_voltage_mv(&self, channel: u8) -> Result<i32, E> {
+        let register = match channel {
+            0 => Register::BusVoltage1,
+            1 => Register::BusVoltage2,
+            _ => Register::BusVoltage3,
+        };
+
+        // LSB = 8mV, meaning the value is downscaled 8:1
+        let raw_value = self.read_register(register)?;
+        let millivolts = Self::convert_to_12bit_signed(raw_value) * BUS_VOLTAGE_SCALE_FACTOR;
+        Ok(millivolts)
     }
 
     pub fn reset(&mut self) -> Result<(), E> {
