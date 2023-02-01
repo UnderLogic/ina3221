@@ -26,7 +26,7 @@ where
         }
     }
 
-    pub fn read_configuration(&self) -> Result<u16, E> {
+    pub fn get_configuration(&self) -> Result<u16, E> {
         self.read_register(Register::Configuration)
     }
 
@@ -37,7 +37,7 @@ where
             _ => CHANNEL_3_FLAG,
         };
 
-        let config = self.read_configuration()?;
+        let config = self.get_configuration()?;
         Ok(config & flag > 0)
     }
 
@@ -48,7 +48,7 @@ where
             _ => CHANNEL_3_FLAG,
         };
 
-        let config = self.read_configuration()?;
+        let config = self.get_configuration()?;
 
         // Toggle the channel bit in the configuration
         match enabled {
@@ -92,6 +92,14 @@ where
         let raw_value = self.read_register(register)?;
         let millivolts = Self::convert_to_12bit_signed(raw_value) * BUS_VOLTAGE_SCALE_FACTOR;
         Ok(millivolts)
+    }
+
+    pub fn get_manufacturer_id(&self) -> Result<u16, E> {
+        self.read_register(Register::ManufacturerId)
+    }
+
+    pub fn get_die_id(&self) -> Result<u16, E> {
+        self.read_register(Register::DieId)
     }
 
     pub fn reset(&mut self) -> Result<(), E> {
