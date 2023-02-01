@@ -9,8 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - `Voltage` immutable struct
+- `read_alert_flags()` mutator method
 - `get_critical_limit(u8)` method
 - `set_critical_limit(u8, Voltage)` mutator method
+- `get_warning_limit(u8)` method
+- `set_warning_limit(u8, Voltage)` mutator method
+- `get_power_valid_limits()` method
+- `set_power_valid_limits(Voltage, Voltage)` mutator method
 - `get_mode()` method
 - `set_mode(OperatingMode)` mutator method
 - Inline documentation

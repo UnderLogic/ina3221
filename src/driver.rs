@@ -364,6 +364,13 @@ where
         Ok(())
     }
 
+    /// Reads the alert flags from the INA3221, clearing them upon read
+    ///
+    /// The flags are returned as a bitfield, see the datasheet for more information
+    pub fn read_alert_flags(&mut self) -> Result<u16, E> {
+        self.read_register(Register::MaskEnable)
+    }
+
     /// Gets the manufacturer ID from the INA3221
     ///
     /// This value is always 0x5449 ('TI' in ASCII), or at least should be
