@@ -10,11 +10,13 @@
 extern crate embedded_hal as hal;
 
 mod driver;
+mod flags;
 mod helpers;
 mod mode;
 mod registers;
 mod voltage;
 
 pub use driver::INA3221;
+pub use flags::MaskEnableFlags;
 pub use mode::OperatingMode;
 pub use voltage::Voltage;

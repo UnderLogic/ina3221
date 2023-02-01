@@ -4,10 +4,13 @@ All notable changes to this library will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.2.1] - 2023-02-01
+## [0.3.0] - 2023-02-01
 
 ### Added
 
+- `MaskEnableFlags` bitflags struct
+- `set_critical_alert_latch(bool)` mutator method
+- `set_warning_alert_latch(bool)` mutator method
 - `get_channels_enabled(&[bool])` method
 - `set_channels_enabled(&mut [bool])` mutator method
 

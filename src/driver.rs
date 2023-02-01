@@ -1,5 +1,5 @@
 use crate::registers::Register;
-use crate::{helpers, OperatingMode, Voltage};
+use crate::{helpers, MaskEnableFlags, OperatingMode, Voltage};
 use core::cell::RefCell;
 use hal::i2c::I2c;
 
@@ -326,6 +326,13 @@ where
         self.write_register(register, helpers::convert_to_12bit_signed(raw_value))
     }
 
+    /// Sets the critical alert latch behavior for the warning alert pin
+    ///
+    /// If enabled, the critical alert pin will latch until the warning alert is cleared
+    pub fn set_critical_alert_latch(&mut self, enabled: bool) -> Result<(), E> {
+        self.set_flag(MaskEnableFlags::CRITICAL_ALERT_LATCH, enabled)
+    }
+
     /// Gets the warning alert limit of a specific monitoring channel
     ///
     /// This is the shunt voltage limit that will trigger a warning alert on that channel
@@ -359,6 +366,13 @@ where
         // LSB = 40uV, meaning the value is downscaled 40:1
         let raw_value = voltage_limit.to_microvolts() / SHUNT_VOLTAGE_SCALE_FACTOR;
         self.write_register(register, helpers::convert_to_12bit_signed(raw_value))
+    }
+
+    /// Sets the warning alert latch behavior for the warning alert pin
+    ///
+    /// If enabled, the warning alert pin will latch until the warning alert is cleared
+    pub fn set_warning_alert_latch(&mut self, enabled: bool) -> Result<(), E> {
+        self.set_flag(MaskEnableFlags::WARNING_ALERT_LATCH, enabled)
     }
 
     /// Gets the power valid limits of **all** enabled monitoring channels
@@ -459,5 +473,22 @@ where
         let buffer: [u8; 3] = [register as u8, msb, lsb];
         self.i2c.borrow_mut().write(self.address, &buffer)?;
         Ok(())
+    }
+
+    fn read_flag(&mut self, flag: MaskEnableFlags, preserve: bool) -> Result<bool, E> {
+        let flags = self.read_register(Register::MaskEnable)?;
+        let flags = MaskEnableFlags::from_bits(flags).unwrap();
+
+        if preserve {
+            self.write_register(Register::MaskEnable, flags.bits())?;
+        }
+        Ok(flags.contains(flag))
+    }
+
+    fn set_flag(&mut self, flag: MaskEnableFlags, enabled: bool) -> Result<(), E> {
+        let flags = self.read_register(Register::MaskEnable)?;
+        let mut new_flags = MaskEnableFlags::from_bits(flags).unwrap();
+        new_flags.set(flag, enabled);
+        self.write_register(Register::MaskEnable, new_flags.bits())
     }
 }
