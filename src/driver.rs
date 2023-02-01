@@ -9,7 +9,7 @@ const CHANNEL_2_FLAG: u16 = 0x2000;
 const CHANNEL_3_FLAG: u16 = 0x1000;
 
 const SHUNT_VOLTAGE_SCALE_FACTOR: i32 = 40;
-const BUS_VOLTAGE_SCALE_FACTOR: i32 = 8;
+const BUS_VOLTAGE_SCALE_FACTOR: i32 = 8000;
 
 /// Device driver for the INA3221 current and power monitor
 ///
@@ -242,10 +242,10 @@ where
             _ => Register::BusVoltage3,
         };
 
-        // LSB = 8mV, meaning the value is downscaled 8:1
+        // LSB = 8mV (8000uV), meaning the value is downscaled 8:1
         let raw_value = self.read_register(register)?;
-        let millivolts = helpers::convert_from_12bit_signed(raw_value) * BUS_VOLTAGE_SCALE_FACTOR;
-        Ok(Voltage::from_microvolts(millivolts * 1000))
+        let microvolts = helpers::convert_from_12bit_signed(raw_value) * BUS_VOLTAGE_SCALE_FACTOR;
+        Ok(Voltage::from_microvolts(microvolts))
     }
 
     /// Gets the critical alert limit of a specific monitoring channel
@@ -316,6 +316,52 @@ where
         // LSB = 40uV, meaning the value is downscaled 40:1
         let raw_value = voltage_limit.to_microvolts() / SHUNT_VOLTAGE_SCALE_FACTOR;
         self.write_register(register, helpers::convert_to_12bit_signed(raw_value))
+    }
+
+    /// Gets the power valid limits of **all** enabled monitoring channels
+    ///
+    /// These are the upper and lower limits for the bus voltage that will trigger a power valid alert
+    /// on all enabled channels
+    pub fn get_power_valid_limits(&self) -> Result<(Voltage, Voltage), E> {
+        // LSB = 8mV (8000uV), meaning the value is downscaled 8:1
+        let lower_raw_value = self.read_register(Register::PowerValidLowerLimit)?;
+        let upper_raw_value = self.read_register(Register::PowerValidUpperLimit)?;
+
+        let lower_microvolts =
+            helpers::convert_from_12bit_signed(lower_raw_value) * BUS_VOLTAGE_SCALE_FACTOR;
+        let upper_microvolts =
+            helpers::convert_from_12bit_signed(upper_raw_value) * BUS_VOLTAGE_SCALE_FACTOR;
+
+        Ok((
+            Voltage::from_microvolts(lower_microvolts),
+            Voltage::from_microvolts(upper_microvolts),
+        ))
+    }
+
+    /// Sets the power valid limits for **all** enabled monitoring channels
+    ///
+    /// These are the upper and lower limits for the bus voltage that will trigger a power valid alert
+    /// on all enabled channels
+    pub fn set_power_valid_limits(
+        &mut self,
+        lower_limit: Voltage,
+        upper_limit: Voltage,
+    ) -> Result<(), E> {
+        // LSB = 8mV (8000uV), meaning the value is downscaled 8:1
+        let lower_raw_value = lower_limit.to_microvolts() / BUS_VOLTAGE_SCALE_FACTOR;
+        let upper_raw_value = upper_limit.to_microvolts() / BUS_VOLTAGE_SCALE_FACTOR;
+
+        self.write_register(
+            Register::PowerValidLowerLimit,
+            helpers::convert_to_12bit_signed(lower_raw_value),
+        )?;
+
+        self.write_register(
+            Register::PowerValidUpperLimit,
+            helpers::convert_to_12bit_signed(upper_raw_value),
+        )?;
+
+        Ok(())
     }
 
     /// Gets the manufacturer ID from the INA3221
