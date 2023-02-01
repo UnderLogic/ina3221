@@ -13,6 +13,8 @@ mod driver;
 mod helpers;
 mod mode;
 mod registers;
+mod voltage;
 
 pub use driver::INA3221;
 pub use mode::OperatingMode;
+pub use voltage::Voltage;

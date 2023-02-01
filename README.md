@@ -41,8 +41,8 @@ fn main() {
 
     loop {
         for channel in 0..3 {
-            let shunt_mv = ina.get_shunt_voltage_mv(channel).unwrap();
-            let bus_mv = ina.get_bus_voltage_mv(channel).unwrap();
+            let shunt_mv = ina.get_shunt_voltage(channel).unwrap().to_millivolts();
+            let bus_mv = ina.get_bus_voltage(channel).unwrap().to_millivolts();
             let load_voltage = (bus_mv + shunt_mv) / 1000f32;
 
             // Skip channel if no voltage present

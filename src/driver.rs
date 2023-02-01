@@ -1,5 +1,5 @@
 use crate::registers::Register;
-use crate::{helpers, OperatingMode};
+use crate::{helpers, OperatingMode, Voltage};
 use core::cell::RefCell;
 use hal::i2c::I2c;
 
@@ -63,7 +63,7 @@ const BUS_VOLTAGE_SCALE_FACTOR: i32 = 8;
 /// ```rust
 /// // Assume a shunt resistor value of 0.1 ohms
 /// let shunt_resistor = 0.1f32;
-/// let shunt_voltage_mv = ina.get_shunt_voltage_mv(0).unwrap();
+/// let shunt_voltage_mv = ina.get_shunt_voltage(0).unwrap().to_millivolts();
 /// let current_milliamps = shunt_voltage_mv / shunt_resistor;
 /// ```
 ///
@@ -79,8 +79,8 @@ const BUS_VOLTAGE_SCALE_FACTOR: i32 = 8;
 /// ```rust
 /// // Assume a shunt resistor value of 0.1 ohms
 /// let shunt_resistor = 0.1f32;
-/// let shunt_voltage_mv = ina.get_shunt_voltage_mv(0).unwrap();
-/// let bus_voltage_mv = ina.get_bus_voltage_mv(0).unwrap();
+/// let shunt_voltage_mv = ina.get_shunt_voltage(0).unwrap().to_millivolts();
+/// let bus_voltage_mv = ina.get_bus_voltage(0).unwrap().to_millivolts();
 /// let load_voltage = (bus_voltage_mv + shunt_voltage_mv) / 1000f32;  // convert to volts
 ///
 /// let current_milliamps = shunt_voltage_mv / shunt_resistor;
@@ -109,9 +109,32 @@ const BUS_VOLTAGE_SCALE_FACTOR: i32 = 8;
 /// # Alerts
 /// The INA3221 can be configured to trigger various alerts based on the various measurements.
 ///
-/// Currently, it is not possible to configure these alerts using this driver.
+/// The following alerts are available:
+///
+/// - Over-current (Critical)
+/// - Over-current (Warning)
+/// - Under-voltage (PowerValid)
+/// - Over-voltage (PowerValid)
+///
 /// See the [INA3221] datasheet for more information on the available alerts and
 /// how they are triggered.
+///
+/// # Example
+///
+/// ```rust
+/// use ina3221::Voltage;
+///
+/// let max_milliamps = 1000f32;    // 1A
+/// let shunt_resistor = 0.1f32;    // 0.1 ohms
+///
+/// // Calculate the maximum voltage that can be measured on the shunt using Ohm's Law (V = I * R)
+/// let max_millivolts = max_milliamps * shunt_resistor; // 100mV
+///
+/// // Set the critical alert limit for channel 1 to raise when exceeding 1A of current draw
+/// ina.set_critical_alert_limit(0, Voltage::from_millivolts(max_millivolts)).unwrap();
+/// ```
+///
+/// Note that these limits are based on the shunt voltage, **not** the load voltage.
 ///
 /// [INA3221]: https://www.ti.com/lit/ds/symlink/ina3221.pdf
 pub struct INA3221<I2C> {
@@ -197,15 +220,8 @@ where
         }
     }
 
-    /// Gets the shunt voltage (in millivolts) from a specific monitoring channel
-    pub fn get_shunt_voltage_mv(&self, channel: u8) -> Result<f32, E> {
-        // Convert whole microvolts into fractional millivolts
-        let microvolts = self.get_shunt_voltage_uv(channel)?;
-        Ok(microvolts as f32 / 1000f32)
-    }
-
-    /// Gets the shunt voltage (in microvolts) from a specific monitoring channel
-    pub fn get_shunt_voltage_uv(&self, channel: u8) -> Result<i32, E> {
+    /// Gets the shunt voltage of a specific monitoring channel
+    pub fn get_shunt_voltage(&self, channel: u8) -> Result<Voltage, E> {
         let register = match channel {
             0 => Register::ShuntVoltage1,
             1 => Register::ShuntVoltage2,
@@ -215,17 +231,11 @@ where
         // LSB = 40uV, meaning the value is downscaled 40:1
         let raw_value = self.read_register(register)?;
         let microvolts = helpers::convert_from_12bit_signed(raw_value) * SHUNT_VOLTAGE_SCALE_FACTOR;
-        Ok(microvolts)
+        Ok(Voltage::from_microvolts(microvolts))
     }
 
-    /// Gets the bus voltage (in volts) from a specific monitoring channel
-    pub fn get_bus_voltage(&self, channel: u8) -> Result<f32, E> {
-        let millivolts = self.get_bus_voltage_mv(channel)?;
-        Ok(millivolts as f32 / 1000f32)
-    }
-
-    /// Gets the bus voltage (in millivolts) from a specific monitoring channel
-    pub fn get_bus_voltage_mv(&self, channel: u8) -> Result<i32, E> {
+    /// Gets the bus voltage of a specific monitoring channel
+    pub fn get_bus_voltage(&self, channel: u8) -> Result<Voltage, E> {
         let register = match channel {
             0 => Register::BusVoltage1,
             1 => Register::BusVoltage2,
@@ -235,21 +245,13 @@ where
         // LSB = 8mV, meaning the value is downscaled 8:1
         let raw_value = self.read_register(register)?;
         let millivolts = helpers::convert_from_12bit_signed(raw_value) * BUS_VOLTAGE_SCALE_FACTOR;
-        Ok(millivolts)
+        Ok(Voltage::from_microvolts(millivolts * 1000))
     }
 
-    /// Gets the critical alert limit (in millivolts) from a specific monitoring channel
+    /// Gets the critical alert limit of a specific monitoring channel
     ///
     /// This is the shunt voltage limit that will trigger a critical alert on that channel
-    pub fn get_critical_alert_limit_mv(&self, channel: u8) -> Result<f32, E> {
-        let microvolts = self.get_critical_alert_limit_uv(channel)?;
-        Ok(microvolts as f32 / 1000f32)
-    }
-
-    /// Gets the critical alert limit (in microvolts) from a specific monitoring channel
-    ///
-    /// This is the shunt voltage limit that will trigger a critical alert on that channel
-    pub fn get_critical_alert_limit_uv(&self, channel: u8) -> Result<i32, E> {
+    pub fn get_critical_alert_limit(&self, channel: u8) -> Result<Voltage, E> {
         let register = match channel {
             0 => Register::CriticalAlertLimit1,
             1 => Register::CriticalAlertLimit2,
@@ -259,21 +261,17 @@ where
         // LSB = 40uV, meaning the value is downscaled 40:1
         let raw_value = self.read_register(register)?;
         let microvolts = helpers::convert_from_12bit_signed(raw_value) * SHUNT_VOLTAGE_SCALE_FACTOR;
-        Ok(microvolts)
+        Ok(Voltage::from_microvolts(microvolts))
     }
 
-    /// Sets the critical alert limit (in millivolts) for a specific monitoring channel
+    /// Sets the critical alert limit for a specific monitoring channel
     ///
     /// This is the shunt voltage limit that will trigger a critical alert on that channel
-    pub fn set_critical_alert_limit_mv(&mut self, channel: u8, millivolts: f32) -> Result<(), E> {
-        let microvolts = millivolts * 1000f32;
-        self.set_critical_alert_limit_uv(channel, microvolts as i32)
-    }
-
-    /// Sets the critical alert limit (in microvolts) for a specific monitoring channel
-    ///
-    /// This is the shunt voltage limit that will trigger a critical alert on that channel
-    pub fn set_critical_alert_limit_uv(&mut self, channel: u8, microvolts: i32) -> Result<(), E> {
+    pub fn set_critical_alert_limit_uv(
+        &mut self,
+        channel: u8,
+        voltage_limit: Voltage,
+    ) -> Result<(), E> {
         let register = match channel {
             0 => Register::CriticalAlertLimit1,
             1 => Register::CriticalAlertLimit2,
@@ -281,7 +279,7 @@ where
         };
 
         // LSB = 40uV, meaning the value is downscaled 40:1
-        let raw_value = microvolts / SHUNT_VOLTAGE_SCALE_FACTOR;
+        let raw_value = voltage_limit.to_microvolts() / SHUNT_VOLTAGE_SCALE_FACTOR;
         self.write_register(register, helpers::convert_to_12bit_signed(raw_value))
     }
 

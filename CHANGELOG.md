@@ -8,9 +8,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `Voltage` immutable struct
+- `get_critical_limit(u8)` method
+- `set_critical_limit(u8, Voltage)` mutator method
 - `get_mode()` method
 - `set_mode(OperatingMode)` mutator method
 - Inline documentation
+
+### Changed
+
+- `get_shunt_voltage(u8)` method now returns `Voltage` struct
+- `get_bus_voltage(u8)` method now returns `Voltage` struct
+
+### Removed
+
+- `get_shunt_voltage_mv(u8)` method
+- `get_bus_voltage_mv(u8)` method
+- `get_shunt_voltage_uv(u8)` method
+- `get_bus_voltage_uv(u8)` method
 
 ## [0.1.0] - 2023-01-31
 
