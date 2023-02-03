@@ -5,8 +5,6 @@ Embedded driver for the [INA3221](https://www.ti.com/lit/ds/symlink/ina3221.pdf)
 
 The INA3221 is very similar to the classic [INA219](https://www.ti.com/lit/ds/symlink/ina219.pdf) power monitor IC.
 
-**NOTE:** This driver is a work in progress and does not support all the INA3221 configuration options yet.
-
 ## Compatibility
 
 Any board that supports [`embedded-hal`](https://github.com/rust-embedded/embedded-hal) [blocking 1.0](https://docs.rs/embedded-hal/1.0.0-alpha.9/embedded_hal/index.html) `I2c` should be compatible with this library.
@@ -47,6 +45,8 @@ fn main() {
         for channel in 0..3 {
             let shunt_voltage = ina.get_shunt_voltage(channel).unwrap();
             let bus_voltage = ina.get_bus_voltage(channel).unwrap();
+            
+            // Voltage can be added using the '+' operator on the unit type
             let load_voltage = bus_voltage + shunt_voltage;
 
             // Skip channel if no voltage present
