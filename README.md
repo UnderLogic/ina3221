@@ -47,7 +47,7 @@ fn main() {
         for channel in 0..3 {
             let shunt_voltage = ina.get_shunt_voltage(channel).unwrap();
             let bus_voltage = ina.get_bus_voltage(channel).unwrap();
-            let load_voltage = bus_voltage + &shunt_voltage;
+            let load_voltage = bus_voltage + shunt_voltage;
 
             // Skip channel if no voltage present
             if shunt_voltage.is_zero() {
