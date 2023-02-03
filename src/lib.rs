@@ -12,9 +12,10 @@ mod driver;
 mod flags;
 mod helpers;
 mod mode;
-mod prelude;
+pub mod prelude;
 mod registers;
 
 pub use driver::INA3221;
 pub use flags::MaskEnableFlags;
 pub use mode::OperatingMode;
+pub use ohms::*;

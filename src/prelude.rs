@@ -1,4 +1,4 @@
 pub use crate::flags::MaskEnableFlags;
 pub use crate::mode::OperatingMode;
 
-pub use ohms::*;
+pub use ohms::prelude::*;
