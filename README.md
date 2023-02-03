@@ -61,7 +61,7 @@ fn main() {
             println!(
                 "Channel {}: load = {:.3} V, current = {:.3} mA, power = {:.3} mW",
                 channel_index + 1,
-                load_volts.volts(),
+                load_voltage.volts(),
                 current_milliamps,
                 power_milliwatts,
             );
