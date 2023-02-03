@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Include `INA3221` in predlude
+- Include `INA3221` in prelude
 
 ## [0.4.2] - 2023-02-03
 
