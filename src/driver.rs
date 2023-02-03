@@ -1,7 +1,8 @@
 use crate::registers::Register;
-use crate::{helpers, MaskEnableFlags, OperatingMode, Voltage};
+use crate::{helpers, MaskEnableFlags, OperatingMode};
 use core::cell::RefCell;
 use hal::i2c::I2c;
+use ohms::Voltage;
 
 const RESET_FLAG: u16 = 0x8000;
 const CHANNEL_1_FLAG: u16 = 0x4000;
