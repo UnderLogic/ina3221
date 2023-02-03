@@ -1,4 +1,5 @@
 /// Represents a register on the INA3221
+#[allow(dead_code)]
 #[derive(Debug)]
 pub enum Register {
     Configuration = 0x00,

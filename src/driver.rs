@@ -26,7 +26,6 @@ const BUS_VOLTAGE_SCALE_FACTOR: i32 = 8000;
 /// It is important to note that the INA3221 will retain configuration settings unless the device is
 /// reset or power cycled. You can manually reset the device by calling the `reset()` method.
 ///
-///
 /// # Channels
 ///
 /// The INA3221 has three channels, each of which can be used to measure the current and power
@@ -63,15 +62,17 @@ const BUS_VOLTAGE_SCALE_FACTOR: i32 = 8000;
 /// The current draw can be calculated using Ohm's Law:
 /// I = V / R
 ///
-/// It is important to be mindful of the units used when calculating the current draw.
+/// The [`ohms`](https://github.com/UnderLogic/ohms) crate is re-exported by this crate,
+/// so you can use the defined unit types to make the calculation easier to read and keep
+/// track of the denominator units.
 ///
 /// ## Example
 ///
 /// ```rust
 /// // Assume a shunt resistor value of 0.1 ohms
-/// let shunt_resistor = 0.1f32;
+/// let shunt_resistor = 100u32.milli_ohms();
 /// let shunt_voltage = ina.get_shunt_voltage(0).unwrap();
-/// let current_milliamps = shunt_voltage.to_millivolts() / shunt_resistor;
+/// let current_milliamps = shunt_voltage.milli_volts() / shunt_resistor.ohms();
 /// ```
 ///
 /// # Power Calculation
@@ -85,13 +86,15 @@ const BUS_VOLTAGE_SCALE_FACTOR: i32 = 8000;
 ///
 /// ```rust
 /// // Assume a shunt resistor value of 0.1 ohms
-/// let shunt_resistor = 0.1f32;
+/// let shunt_resistor = 100u32.milli_ohms();
 /// let shunt_voltage = ina.get_shunt_voltage(0).unwrap();
 /// let bus_voltage = ina.get_bus_voltage(0).unwrap();
-/// let load_voltage = bus_voltage.add(&shunt_voltage);
 ///
-/// let current_milliamps = shunt_voltage.to_millivolts() / shunt_resistor;
-/// let power_milliwatts = current_milliamps * load_voltage.to_volts();
+/// // Can use the '+' operator to add the shunt and bus voltage structs together
+/// let load_voltage = bus_voltage + shunt_voltage;
+///
+/// let current_milliamps = shunt_voltage.milli_volts() / shunt_resistor.ohms();
+/// let power_milliwatts = current_milliamps * load_voltage.volts();
 /// ```
 ///
 /// # Operating Mode
@@ -124,27 +127,27 @@ const BUS_VOLTAGE_SCALE_FACTOR: i32 = 8000;
 /// - Under-voltage (PowerValid)
 /// - Over-voltage (PowerValid)
 ///
-/// See the [INA3221] datasheet for more information on the available alerts and
-/// how they are triggered.
+/// The [`ohms`](https://github.com/UnderLogic/ohms) crate is re-exported by this crate,
+/// so you can use the defined unit types to make the calculation easier to read and keep
+/// track of the denominator units.
 ///
 /// # Example
 ///
 /// ```rust
-/// use ina3221::Voltage;
-///
-/// let max_milliamps = 1000f32;    // 1A
-/// let shunt_resistor = 0.1f32;    // 0.1 ohms
+/// let max_current = 1u32.amps();  // 1A
+/// let shunt_resistor = 100u32.ohms(); // 0.1 ohms
 ///
 /// // Calculate the maximum voltage that can be measured on the shunt using Ohm's Law (V = I * R)
-/// let max_millivolts = max_milliamps * shunt_resistor; // 100mV
+/// let max_voltage = max_current.milli_amps() * shunt_resistor.ohms(); // 100mV
 ///
 /// // Set the critical alert limit for channel 1 to raise when exceeding 1A of current draw
-/// ina.set_critical_alert_limit(0, Voltage::from_millivolts(max_millivolts)).unwrap();
+/// ina.set_critical_alert_limit(0, max_voltage.milli_volts()).unwrap();
 /// ```
 ///
 /// Note that these limits are based on the shunt voltage, **not** the load voltage.
 ///
 /// [INA3221]: https://www.ti.com/lit/ds/symlink/ina3221.pdf
+///
 pub struct INA3221<I2C> {
     i2c: RefCell<I2C>,
     /// I2C address of the INA3221
@@ -274,7 +277,7 @@ where
         // LSB = 40uV, meaning the value is downscaled 40:1
         let raw_value = self.read_register(register)?;
         let microvolts = helpers::convert_from_12bit_signed(raw_value) * SHUNT_VOLTAGE_SCALE_FACTOR;
-        Ok(Voltage::from_microvolts(microvolts))
+        Ok(Voltage::from_micro_volts(microvolts))
     }
 
     /// Gets the bus voltage of a specific monitoring channel
@@ -288,7 +291,7 @@ where
         // LSB = 8mV (8000uV), meaning the value is downscaled 8:1
         let raw_value = self.read_register(register)?;
         let microvolts = helpers::convert_from_12bit_signed(raw_value) * BUS_VOLTAGE_SCALE_FACTOR;
-        Ok(Voltage::from_microvolts(microvolts))
+        Ok(Voltage::from_micro_volts(microvolts))
     }
 
     /// Gets the critical alert limit of a specific monitoring channel
@@ -304,7 +307,7 @@ where
         // LSB = 40uV, meaning the value is downscaled 40:1
         let raw_value = self.read_register(register)?;
         let microvolts = helpers::convert_from_12bit_signed(raw_value) * SHUNT_VOLTAGE_SCALE_FACTOR;
-        Ok(Voltage::from_microvolts(microvolts))
+        Ok(Voltage::from_micro_volts(microvolts))
     }
 
     /// Sets the critical alert limit for a specific monitoring channel
@@ -322,7 +325,7 @@ where
         };
 
         // LSB = 40uV, meaning the value is downscaled 40:1
-        let raw_value = voltage_limit.to_microvolts() / SHUNT_VOLTAGE_SCALE_FACTOR;
+        let raw_value = voltage_limit.micro_volts() / SHUNT_VOLTAGE_SCALE_FACTOR;
         self.write_register(register, helpers::convert_to_12bit_signed(raw_value))
     }
 
@@ -346,7 +349,7 @@ where
         // LSB = 40uV, meaning the value is downscaled 40:1
         let raw_value = self.read_register(register)?;
         let microvolts = helpers::convert_from_12bit_signed(raw_value) * SHUNT_VOLTAGE_SCALE_FACTOR;
-        Ok(Voltage::from_microvolts(microvolts))
+        Ok(Voltage::from_micro_volts(microvolts))
     }
 
     /// Sets the warning alert limit for a specific monitoring channel
@@ -364,7 +367,7 @@ where
         };
 
         // LSB = 40uV, meaning the value is downscaled 40:1
-        let raw_value = voltage_limit.to_microvolts() / SHUNT_VOLTAGE_SCALE_FACTOR;
+        let raw_value = voltage_limit.micro_volts() / SHUNT_VOLTAGE_SCALE_FACTOR;
         self.write_register(register, helpers::convert_to_12bit_signed(raw_value))
     }
 
@@ -390,8 +393,8 @@ where
             helpers::convert_from_12bit_signed(upper_raw_value) * BUS_VOLTAGE_SCALE_FACTOR;
 
         Ok((
-            Voltage::from_microvolts(lower_microvolts),
-            Voltage::from_microvolts(upper_microvolts),
+            Voltage::from_micro_volts(lower_microvolts),
+            Voltage::from_micro_volts(upper_microvolts),
         ))
     }
 
@@ -405,8 +408,8 @@ where
         upper_limit: Voltage,
     ) -> Result<(), E> {
         // LSB = 8mV (8000uV), meaning the value is downscaled 8:1
-        let lower_raw_value = lower_limit.to_microvolts() / BUS_VOLTAGE_SCALE_FACTOR;
-        let upper_raw_value = upper_limit.to_microvolts() / BUS_VOLTAGE_SCALE_FACTOR;
+        let lower_raw_value = lower_limit.micro_volts() / BUS_VOLTAGE_SCALE_FACTOR;
+        let upper_raw_value = upper_limit.micro_volts() / BUS_VOLTAGE_SCALE_FACTOR;
 
         self.write_register(
             Register::PowerValidLowerLimit,
