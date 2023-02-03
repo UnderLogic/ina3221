@@ -134,8 +134,6 @@ const BUS_VOLTAGE_SCALE_FACTOR: i32 = 8000;
 /// # Example
 ///
 /// ```rust
-/// use ina3221::Voltage;
-///
 /// let max_current = 1u32.amps();  // 1A
 /// let shunt_resistor = 100u32.ohms(); // 0.1 ohms
 ///
