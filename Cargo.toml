@@ -1,6 +1,6 @@
 [package]
 name = "ina3221"
-version = "0.4.2"
+version = "0.4.3"
 authors = ["Erik Rogers <erik@underlogic.tech>"]
 edition = "2021"
 repository = "https://github.com/UnderLogic/ina3221"
